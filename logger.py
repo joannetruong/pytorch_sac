@@ -18,7 +18,17 @@ COMMON_TRAIN_FORMAT = [
 COMMON_EVAL_FORMAT = [
     ('episode', 'E', 'int'),
     ('step', 'S', 'int'),
-    ('episode_reward', 'R', 'float') 
+    ('episode_reward', 'R', 'float'),
+    ('episode_initial_x', 'EIX', 'float'),
+    ('episode_initial_y', 'EIY', 'float'),
+    ('episode_target_x', 'ETX', 'float'),
+    ('episode_target_y', 'ETY', 'float'),
+    ('dist_to_goal', 'DTG', 'float'), 
+    ('success', 'SUCC', 'float'),
+    ('spl', 'SPL', 'float'),
+    ('num_steps', 'NS', 'float'),
+    ('num_collisions', 'NC', 'float'),
+    ('path_length', 'PL', 'float')
 ]
 
 

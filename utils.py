@@ -8,8 +8,10 @@ import os
 from collections import deque
 import random
 import math
-
-import dmc2gym
+from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv, NavigateRandomEnvSim2Real
+from gibson2.data.utils import get_train_models
+import gibson2
+#import dmc2gym
 
 
 def make_env(cfg):
@@ -28,6 +30,18 @@ def make_env(cfg):
     env.seed(cfg.seed)
     assert env.action_space.low.min() >= -1
     assert env.action_space.high.max() <= 1
+
+    return env
+
+def make_gibson_env(cfg):
+    """Helper function to create gibson environment"""
+#    env = NavigateRandomEnv(config_file=cfg.gibson_cfg, mode='headless')
+    sim2real_track = 'static'
+    env = NavigateRandomEnvSim2Real(config_file=cfg.gibson_cfg,
+                                    mode='headless',
+                                    action_timestep=1.0 / 10.0,
+                                    physics_timestep=1.0 / 40.0,
+                                    track=sim2real_track)
 
     return env
 

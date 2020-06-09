@@ -11,7 +11,7 @@ replay_buffer_capacity: ${num_train_steps}
 
 num_seed_steps: 5000
 
-eval_frequency: 10000
+eval_frequency: 10
 num_eval_episodes: 10
 
 device: cuda
@@ -22,7 +22,8 @@ log_save_tb: true
 
 # video recorder
 save_video: true
-
+save_model: true
+save_buffer: true
 
 seed: 1
 
@@ -32,3 +33,6 @@ hydra:
     name: ${env}
     run:
         dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
+
+#gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
+gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_stadium.yaml

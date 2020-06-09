@@ -139,3 +139,28 @@ class SACAgent(Agent):
         if step % self.critic_target_update_frequency == 0:
             utils.soft_update_params(self.critic, self.critic_target,
                                      self.critic_tau)
+
+    def save(self, model_dir, step):
+        torch.save(
+            self.actor.state_dict(), '%s/actor_%s.pt' % (model_dir, step)
+        )
+        torch.save(
+            self.critic.state_dict(), '%s/critic_%s.pt' % (model_dir, step)
+        )
+        # if self.decoder is not None:
+        #     torch.save(
+        #         self.decoder.state_dict(),
+        #         '%s/decoder_%s.pt' % (model_dir, step)
+        #     )
+
+    def load(self, model_dir, step):
+        self.actor.load_state_dict(
+            torch.load('%s/actor_%s.pt' % (model_dir, step))
+        )
+        self.critic.load_state_dict(
+            torch.load('%s/critic_%s.pt' % (model_dir, step))
+        )
+        # if self.decoder is not None:
+        #     self.decoder.load_state_dict(
+        #         torch.load('%s/decoder_%s.pt' % (model_dir, step))
+        #     )

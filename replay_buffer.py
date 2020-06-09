@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-
+import os
 
 class ReplayBuffer(object):
     """Buffer to store environment transitions."""
@@ -51,3 +51,32 @@ class ReplayBuffer(object):
                                            device=self.device)
 
         return obses, actions, rewards, next_obses, not_dones, not_dones_no_max
+
+    def save(self, save_dir):
+        if self.idx == self.last_save:
+            return
+        path = os.path.join(save_dir, '%d_%d.pt' % (self.last_save, self.idx))
+        payload = [
+            self.obses[self.last_save:self.idx],
+            self.next_obses[self.last_save:self.idx],
+            self.actions[self.last_save:self.idx],
+            self.rewards[self.last_save:self.idx],
+            self.not_dones[self.last_save:self.idx]
+        ]
+        self.last_save = self.idx
+        torch.save(payload, path)
+
+    def load(self, save_dir):
+        chunks = os.listdir(save_dir)
+        chucks = sorted(chunks, key=lambda x: int(x.split('_')[0]))
+        for chunk in chucks:
+            start, end = [int(x) for x in chunk.split('.')[0].split('_')]
+            path = os.path.join(save_dir, chunk)
+            payload = torch.load(path)
+            assert self.idx == start
+            self.obses[start:end] = payload[0]
+            self.next_obses[start:end] = payload[1]
+            self.actions[start:end] = payload[2]
+            self.rewards[start:end] = payload[3]
+            self.not_dones[start:end] = payload[4]
+            self.idx = end
