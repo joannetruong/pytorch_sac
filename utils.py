@@ -11,8 +11,6 @@ import math
 from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv, NavigateRandomEnvSim2Real
 from gibson2.data.utils import get_train_models
 import gibson2
-#import dmc2gym
-
 
 def make_env(cfg):
     """Helper function to create dm_control environment"""
@@ -44,7 +42,6 @@ def make_gibson_env(cfg):
                                     track=sim2real_track)
 
     return env
-
 
 class eval_mode(object):
     def __init__(self, *models):
@@ -106,6 +103,16 @@ def weight_init(m):
         if hasattr(m.bias, 'data'):
             m.bias.data.fill_(0.0)
 
+def preprocess_obs(obs, bits=5):
+    """Preprocessing image, see https://arxiv.org/abs/1807.03039."""
+    bins = 2**bits
+    assert obs.dtype == torch.float32
+    if bits < 8:
+        obs = torch.floor(obs / 2**(8 - bits))
+    obs = obs / bins
+    obs = obs + torch.rand_like(obs) / bins
+    obs = obs - 0.5
+    return obs
 
 class MLP(nn.Module):
     def __init__(self,
@@ -143,3 +150,37 @@ def to_np(t):
         return np.array([])
     else:
         return t.cpu().detach().numpy()
+
+class FrameStack(gym.Wrapper):
+    def __init__(self, env, k):
+        gym.Wrapper.__init__(self, env)
+        self._k = k
+        self._frames = deque([], maxlen=k)
+        shp = env.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0,
+            high=1,
+            shape=((shp[0] * k,) + shp[1:]),
+            dtype=env.observation_space.dtype
+        )
+        self._max_episode_steps = env._max_episode_steps
+
+    def reset(self):
+        obs = self.env.reset()
+        for _ in range(self._k):
+            self._frames.append(obs)
+        return self._get_obs()
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self._frames.append(obs)
+        return self._get_obs(), reward, done, info
+
+    def _get_obs(self):
+        assert len(self._frames) == self._k
+        return np.concatenate(list(self._frames), axis=0)
+        
+    def get_rgb(self):
+        frame = self.env.get_rgb()
+        frame = frame * 255
+        return frame

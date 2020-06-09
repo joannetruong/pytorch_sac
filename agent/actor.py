@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch import distributions as pyd
 
 import utils
+from encoder import make_encoder
+from decoder import make_decoder
 
 
 class TanhTransform(pyd.transforms.Transform):
@@ -58,9 +60,13 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
 class DiagGaussianActor(nn.Module):
     """torch.distributions implementation of an diagonal Gaussian policy."""
     def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth,
-                 log_std_bounds):
+                 log_std_bounds, encoder_type, encoder_feature_dim, num_layers, num_filters):
         super().__init__()
 
+        self.encoder = make_encoder(
+            encoder_type, obs_dim, encoder_feature_dim, num_layers,
+            num_filters
+        )
         self.log_std_bounds = log_std_bounds
         self.trunk = utils.mlp(obs_dim, hidden_dim, 2 * action_dim,
                                hidden_depth)
@@ -68,7 +74,8 @@ class DiagGaussianActor(nn.Module):
         self.outputs = dict()
         self.apply(utils.weight_init)
 
-    def forward(self, obs):
+    def forward(self, obs, detach_encoder=False):
+        obs = self.encoder(obs, detach=detach_encoder)
         mu, log_std = self.trunk(obs).chunk(2, dim=-1)
 
         # constrain log_std inside [log_std_min, log_std_max]

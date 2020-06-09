@@ -4,12 +4,21 @@ from torch import nn
 import torch.nn.functional as F
 
 import utils
+from encoder import make_encoder
+from decoder import make_decoder
+
 
 
 class DoubleQCritic(nn.Module):
     """Critic network, employes double Q-learning."""
-    def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth):
+    def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth, 
+        encoder_type, encoder_feature_dim, num_layers, num_filters):
         super().__init__()
+
+        self.encoder = make_encoder(
+            encoder_type, obs_dim, encoder_feature_dim, num_layers,
+            num_filters
+        )
 
         self.Q1 = utils.mlp(obs_dim + action_dim, hidden_dim, 1, hidden_depth)
         self.Q2 = utils.mlp(obs_dim + action_dim, hidden_dim, 1, hidden_depth)
@@ -17,7 +26,9 @@ class DoubleQCritic(nn.Module):
         self.outputs = dict()
         self.apply(utils.weight_init)
 
-    def forward(self, obs, action):
+    def forward(self, obs, action, detach_encoder=False):
+        obs = self.encoder(obs, detach=detach_encoder)
+
         assert obs.size(0) == action.size(0)
 
         obs_action = torch.cat([obs, action], dim=-1)
