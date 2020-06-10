@@ -11,6 +11,7 @@ import math
 from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv, NavigateRandomEnvSim2Real
 from gibson2.data.utils import get_train_models
 import gibson2
+from collections import OrderedDict
 
 def make_env(cfg):
     """Helper function to create dm_control environment"""
@@ -102,6 +103,14 @@ def weight_init(m):
         nn.init.orthogonal_(m.weight.data)
         if hasattr(m.bias, 'data'):
             m.bias.data.fill_(0.0)
+    elif isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
+        # delta-orthogonal init from https://arxiv.org/pdf/1806.05393.pdf
+        assert m.weight.size(2) == m.weight.size(3)
+        m.weight.data.fill_(0.0)
+        m.bias.data.fill_(0.0)
+        mid = m.weight.size(2) // 2
+        gain = nn.init.calculate_gain('relu')
+        nn.init.orthogonal_(m.weight.data[:, :, mid, mid], gain)
 
 def preprocess_obs(obs, bits=5):
     """Preprocessing image, see https://arxiv.org/abs/1807.03039."""
@@ -156,31 +165,53 @@ class FrameStack(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         self._k = k
         self._frames = deque([], maxlen=k)
-        shp = env.observation_space.shape
-        self.observation_space = gym.spaces.Box(
+        h, w, c = env.observation_space.spaces["rgb"].shape
+        rgb_shp = (c, h, w)
+        sensor = np.array([1, 2])
+        s_shp = sensor.shape
+        self.sensor_space = gym.spaces.Box(low=-np.inf,
+                                           high=np.inf,
+                                           shape=(s_shp),
+                                           dtype=env.observation_space.spaces["sensor"].dtype)
+        self.rgb_space = gym.spaces.Box(
             low=0,
             high=1,
-            shape=((shp[0] * k,) + shp[1:]),
-            dtype=env.observation_space.dtype
+            shape=((rgb_shp[0] * k,) + rgb_shp[1:]),
+            dtype=env.observation_space.spaces["rgb"].dtype
         )
-        self._max_episode_steps = env._max_episode_steps
+        self.observation_space=OrderedDict()
+        self.observation_space['sensor'] = self.sensor_space
+        self.observation_space['rgb'] = self.rgb_space
+#        self._max_episode_steps = env._max_episode_steps
+        self.max_step = env.max_step
 
     def reset(self):
         obs = self.env.reset()
+        obs["rgb"] = (obs["rgb"] * 255).round().astype(np.uint8)
+        obs["rgb"] = np.moveaxis(obs["rgb"], 2, 0)
         for _ in range(self._k):
-            self._frames.append(obs)
-        return self._get_obs()
+            self._frames.append(obs["rgb"])
+        return self._get_obs(obs)
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        self._frames.append(obs)
-        return self._get_obs(), reward, done, info
+        obs["rgb"] = (obs["rgb"] * 255).round().astype(np.uint8)
+        obs["rgb"] = np.moveaxis(obs["rgb"], 2, 0)
+        self._frames.append(obs["rgb"])
+        return self._get_obs(obs), reward, done, info
 
-    def _get_obs(self):
+    def _get_obs(self, obs):
         assert len(self._frames) == self._k
-        return np.concatenate(list(self._frames), axis=0)
-        
+        obs["rgb"] = np.concatenate(list(self._frames), axis=0)
+        return obs
+
     def get_rgb(self):
         frame = self.env.get_rgb()
         frame = frame * 255
         return frame
+
+    def get_initial_pos(self):
+        return self.env.initial_pos
+
+    def get_target_pos(self):
+        return self.env.target_pos

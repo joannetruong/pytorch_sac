@@ -7,18 +7,20 @@ import math
 
 from agent import Agent
 import utils
+from encoder import make_encoder
+from decoder import make_decoder
 
 import hydra
 
 
 class SACAgent(Agent):
     """SAC algorithm."""
-    def __init__(self, obs_dim, action_dim, action_range, device,
+    def __init__(self, obs_dim, obs_shape, action_dim, action_range, device,
                  critic_cfg, actor_cfg, discount, init_temperature, alpha_lr,
                  alpha_betas, actor_lr, actor_betas, actor_update_frequency,
                  critic_lr, critic_betas, critic_tau,
-                 critic_target_update_frequency, batch_size, decoder_type, 
-                 encoder_tau, decoder_update_freq, decoder_latent_lambda, decoder_weight_lambda):
+                 critic_target_update_frequency, batch_size, encoder_feature_dim, num_layers, num_filters,
+                 encoder_lr, decoder_lr, decoder_type, encoder_tau, decoder_update_freq, decoder_latent_lambda, decoder_weight_lambda):
         super().__init__()
 
         self.action_range = action_range
@@ -52,7 +54,7 @@ class SACAgent(Agent):
                 decoder_type, obs_shape, encoder_feature_dim, num_layers,
                 num_filters
             ).to(device)
-            self.decoder.apply(weight_init)
+            self.decoder.apply(utils.weight_init)
 
             # optimizer for critic encoder for reconstruction loss
             self.encoder_optimizer = torch.optim.Adam(
@@ -94,8 +96,10 @@ class SACAgent(Agent):
         return self.log_alpha.exp()
 
     def act(self, obs, sample=False):
-        obs = torch.FloatTensor(obs).to(self.device)
-        obs = obs.unsqueeze(0)
+        obs["rgb"] = torch.FloatTensor(obs["rgb"]).to(self.device)
+        obs["rgb"] = obs["rgb"].unsqueeze(0)
+        obs["sensor"] = torch.FloatTensor(obs["sensor"]).to(self.device)
+        obs["sensor"] = obs["sensor"].unsqueeze(0)
         dist = self.actor(obs)
         action = dist.sample() if sample else dist.mean
         action = action.clamp(*self.action_range)

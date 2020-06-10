@@ -29,6 +29,8 @@ save_buffer: true
 
 seed: 1
 
+encoder_type: pixel
+frame_stack: 3
 
 # hydra configuration
 hydra:
