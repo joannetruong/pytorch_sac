@@ -20,7 +20,7 @@ class DoubleQCritic(nn.Module):
             num_filters
         )
 
-        self.tgt_embeding = nn.Linear(obs_dim, 32)
+        self.tgt_embeding = nn.Linear(obs_dim+1, 32)
         dim = self.encoder.feature_dim + 32
         self.Q1 = utils.mlp(dim + action_dim, hidden_dim, 1, hidden_depth)
         self.Q2 = utils.mlp(dim + action_dim, hidden_dim, 1, hidden_depth)
@@ -30,7 +30,8 @@ class DoubleQCritic(nn.Module):
 
     def forward(self, obs, action, detach_encoder=False):
         obs_rgb = self.encoder(obs["rgb"], detach=detach_encoder)
-        obs_sensor = self.tgt_embeding(obs["sensor"])
+        sensor = torch.stack([obs["sensor"][:, 0], torch.cos(obs["sensor"][:, 1]), torch.sin(obs["sensor"][:, 1])], -1)
+        obs_sensor = self.tgt_embeding(sensor)
         obs = torch.cat((obs_rgb, obs_sensor), 1)
         assert obs.size(0) == action.size(0)
 
