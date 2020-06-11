@@ -158,7 +158,7 @@ class SACAgent(Agent):
 
     def update_decoder(self, obs, target_obs, L, step):
         h = self.critic.encoder(obs["rgb"])
-
+        target_obs = target_obs["rgb"]
         if target_obs.dim() == 4:
             # preprocess images to be in [-0.5, 0.5] range
             target_obs = utils.preprocess_obs(target_obs)
