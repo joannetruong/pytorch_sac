@@ -67,8 +67,10 @@ class DiagGaussianActor(nn.Module):
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
             num_filters
         )
+        self.tgt_embeding = nn.Linear(obs_dim, 32)
+
         self.log_std_bounds = log_std_bounds
-        dim = self.encoder.feature_dim + obs_dim
+        dim = self.encoder.feature_dim + 32
         self.trunk = utils.mlp(dim, hidden_dim, 2 * action_dim,
                                hidden_depth)
 
@@ -76,7 +78,9 @@ class DiagGaussianActor(nn.Module):
         self.apply(utils.weight_init)
 
     def forward(self, obs, detach_encoder=False):
-        obs["rgb"] = self.encoder(obs["rgb"], detach=detach_encoder)
+        obs_rgb = self.encoder(obs["rgb"], detach=detach_encoder)
+        obs_sensor = self.tgt_embeding(obs["sensor"])
+        obs = torch.cat((obs_rgb, obs_sensor), 1)
         mu, log_std = self.trunk(obs).chunk(2, dim=-1)
 
         # constrain log_std inside [log_std_min, log_std_max]

@@ -207,7 +207,7 @@ class FrameStack(gym.Wrapper):
 
     def get_rgb(self):
         frame = self.env.get_rgb()
-        frame = frame * 255
+        frame = (frame * 255).round()
         return frame
 
     def get_initial_pos(self):

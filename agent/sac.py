@@ -98,7 +98,7 @@ class SACAgent(Agent):
     def act(self, obs, sample=False):
         obs["rgb"] = torch.FloatTensor(obs["rgb"]).to(self.device)
         obs["rgb"] = obs["rgb"].unsqueeze(0)
-        obs["sensor"] = torch.FloatTensor(obs["sensor"]).to(self.device)
+        obs["sensor"] = torch.FloatTensor(obs["sensor"][:2]).to(self.device)
         obs["sensor"] = obs["sensor"].unsqueeze(0)
         dist = self.actor(obs)
         action = dist.sample() if sample else dist.mean
@@ -157,7 +157,7 @@ class SACAgent(Agent):
         self.log_alpha_optimizer.step()
 
     def update_decoder(self, obs, target_obs, L, step):
-        h = self.critic.encoder(obs)
+        h = self.critic.encoder(obs["rgb"])
 
         if target_obs.dim() == 4:
             # preprocess images to be in [-0.5, 0.5] range

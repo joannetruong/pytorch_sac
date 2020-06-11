@@ -21,7 +21,6 @@ class VideoRecorder(object):
     def record(self, env):
         if self.enabled:
             frame = env.get_rgb()
-            frame = frame * 255
 #            frame = env.render(mode='rgb_array',
 #                               height=self.height,
 #                               width=self.width,
