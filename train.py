@@ -66,11 +66,11 @@ class Workspace(object):
         print("obs space: ", self.env.observation_space)
         print("obs space shape: ", self.env.observation_space.shape)
         if cfg.encoder_type == 'pixel':
-            self.env = utils.FrameStack(self.env, k=cfg.frame_stack)
+            self.env = utils.FrameStackDepth(self.env, k=cfg.frame_stack)
         print("obs space: ", self.env.observation_space)
 
         cfg.agent.params.obs_dim = self.env.observation_space["sensor"].shape[0]
-        cfg.agent.params.obs_shape = self.env.observation_space["rgb"].shape
+        cfg.agent.params.obs_shape = self.env.observation_space["depth"].shape
         cfg.agent.params.action_dim = self.env.action_space.shape[0]
         cfg.agent.params.action_range = [
             float(self.env.action_space.low.min()),
@@ -78,7 +78,7 @@ class Workspace(object):
         ]
         self.agent = hydra.utils.instantiate(cfg.agent)
         self.replay_buffer = ReplayBuffer(self.env.observation_space["sensor"].shape,
-                                          self.env.observation_space["rgb"].shape,
+                                          self.env.observation_space["depth"].shape,
                                           self.env.action_space.shape,
                                           int(cfg.replay_buffer_capacity),
                                           self.device)
@@ -106,7 +106,8 @@ class Workspace(object):
                     action = self.agent.act(obs, sample=False)
                 obs, reward, done, info = self.env.step(action)
 #                obs = obs["sensor"][:2]
-                self.video_recorder.record(self.env)
+                self.video_recorder.record_depth(self.env)
+#                self.video_recorder.record_rgb(self.env)
                 episode_reward += reward
 
             self.video_recorder.save(f'{self.step}.mp4')

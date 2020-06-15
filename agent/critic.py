@@ -30,12 +30,13 @@ class DoubleQCritic(nn.Module):
         self.apply(utils.weight_init)
 
     def forward(self, obs, action, detach_encoder=False):
-        obs_rgb = self.encoder(obs["rgb"], detach=detach_encoder)
+#        obs_rgb = self.encoder(obs["rgb"], detach=detach_encoder)
+        obs_img = self.encoder(obs["depth"], detach=detach_encoder)
         sensor = torch.stack([obs["sensor"][:, 0], torch.cos(obs["sensor"][:, 1]), torch.sin(obs["sensor"][:, 1])], -1)
         embed_sensor = self.tgt_embeding(sensor)
         embed_sensor_norm = self.ln(embed_sensor)
         obs_sensor = torch.tanh(embed_sensor_norm)
-        obs = torch.cat((obs_rgb, obs_sensor), 1)
+        obs = torch.cat((obs_img, obs_sensor), 1)
 #        obs = torch.cat((obs_rgb, embed_sensor), 1)
         assert obs.size(0) == action.size(0)
 

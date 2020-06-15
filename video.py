@@ -18,13 +18,18 @@ class VideoRecorder(object):
         self.frames = []
         self.enabled = self.save_dir is not None and enabled
 
-    def record(self, env):
+    def record_rgb(self, env):
         if self.enabled:
             frame = env.get_rgb()
 #            frame = env.render(mode='rgb_array',
 #                               height=self.height,
 #                               width=self.width,
 #                               camera_id=self.camera_id)
+            self.frames.append(frame.astype(np.uint8))
+
+    def record_depth(self, env):
+        if self.enabled:
+            frame = env.get_depth()
             self.frames.append(frame.astype(np.uint8))
 
     def save(self, file_name):
