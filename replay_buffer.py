@@ -30,12 +30,29 @@ class ReplayBuffer(object):
         return self.capacity if self.full else self.idx
 
     def add(self, obs, action, reward, next_obs, done, done_no_max):
-        np.copyto(self.obses["sensor"][self.idx], obs["sensor"][:2])
-        np.copyto(self.obses["rgb"][self.idx], obs["rgb"])
+        if torch.is_tensor(obs["sensor"][:2]):
+            obs_sensor = obs["sensor"][:2].detach().cpu().numpy()
+        else:
+            obs_sensor = obs["sensor"][:2]
+        if torch.is_tensor(obs["rgb"]):
+            obs_rgb = obs["rgb"].detach().cpu().numpy().astype(np.uint8)
+        else:
+            obs_rgb = obs["rgb"]
+        if torch.is_tensor(next_obs["sensor"][:2]):
+            next_obs_sensor = next_obs["sensor"][:2].detach().cpu().numpy()
+        else:
+            next_obs_sensor = next_obs["sensor"][:2]
+        if torch.is_tensor(next_obs["rgb"]):
+            print('tensor next rgb: ', next_obs["rgb"])
+            next_obs_rgb = next_obs["rgb"].detach().cpu().numpy().astype(np.uint8)
+        else:
+            next_obs_rgb = next_obs["rgb"]
+        np.copyto(self.obses["sensor"][self.idx], obs_sensor)
+        np.copyto(self.obses["rgb"][self.idx], obs_rgb)
         np.copyto(self.actions[self.idx], action)
         np.copyto(self.rewards[self.idx], reward)
-        np.copyto(self.next_obses["sensor"][self.idx], next_obs["sensor"][:2])
-        np.copyto(self.next_obses["rgb"][self.idx], next_obs["rgb"])
+        np.copyto(self.next_obses["sensor"][self.idx], next_obs_sensor)
+        np.copyto(self.next_obses["rgb"][self.idx], next_obs_rgb)
         np.copyto(self.not_dones[self.idx], not done)
         np.copyto(self.not_dones_no_max[self.idx], not done_no_max)
 
@@ -60,7 +77,7 @@ class ReplayBuffer(object):
         not_dones_no_max = torch.as_tensor(self.not_dones_no_max[idxs],
                                            device=self.device)
 
-        return obses, actions, rewards, next_obses, next_obses_img, not_dones, not_dones_no_max
+        return obses, actions, rewards, next_obses, not_dones, not_dones_no_max
 
     def save(self, save_dir):
         if self.idx == self.last_save:

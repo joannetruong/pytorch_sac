@@ -12,6 +12,7 @@ from decoder import make_decoder
 
 import hydra
 
+LOG_FREQ = 10000
 
 class SACAgent(Agent):
     """SAC algorithm."""
@@ -156,7 +157,7 @@ class SACAgent(Agent):
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
 
-    def update_decoder(self, obs, target_obs, L, step):
+    def update_decoder(self, obs, target_obs, logger, step):
         h = self.critic.encoder(obs["rgb"])
         target_obs = target_obs["rgb"]
         if target_obs.dim() == 4:
@@ -176,9 +177,9 @@ class SACAgent(Agent):
 
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
-        L.log('train_ae/ae_loss', loss, step)
+        logger.log('train_ae/ae_loss', loss, step)
 
-        self.decoder.log(L, step, log_freq=LOG_FREQ)
+        self.decoder.log(logger, step, log_freq=LOG_FREQ)
 
     def update(self, replay_buffer, logger, step):
         obs, action, reward, next_obs, not_done, not_done_no_max = replay_buffer.sample(
@@ -197,7 +198,7 @@ class SACAgent(Agent):
                                      self.critic_tau)
 
         if self.decoder is not None and step % self.decoder_update_freq == 0:
-            self.update_decoder(obs, obs, L, step)
+            self.update_decoder(obs, obs, logger, step)
 
     def save(self, model_dir, step):
         torch.save(
