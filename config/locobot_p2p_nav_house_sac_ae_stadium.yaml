@@ -35,6 +35,9 @@ max_step: 500
 max_collisions_allowed: 500
 reset_initial_pos_only: True
 
+# target dist
+target_dist_min: 0.1 
+target_dist_max: 0.5
 # sensor
 output: [sensor, rgb, depth]
 image_height: 84

@@ -296,6 +296,8 @@ class FrameStackDepth(gym.Wrapper):
         self.observation_space['depth'] = self.depth_space
 #        self._max_episode_steps = env._max_episode_steps
         self.max_step = env.max_step
+        self.target_dist_min = env.target_dist_min
+        self.target_dist_max = env.target_dist_max
 
     def reset(self):
         obs = self.env.reset()
@@ -327,3 +329,7 @@ class FrameStackDepth(gym.Wrapper):
 
     def get_target_pos(self):
         return self.env.target_pos
+
+    def set_min_max_dist(self, min, max):
+        self.env.target_dist_min = min
+        self.env.target_dist_max = max

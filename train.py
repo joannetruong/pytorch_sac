@@ -11,6 +11,7 @@ import time
 import pickle as pkl
 from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv
 from gibson2.data.utils import get_train_models
+from gibson2.utils.utils import l2_distance
 import gibson2
 
 
@@ -101,6 +102,7 @@ class Workspace(object):
             self.logger.log('eval/episode_initial_y', initial_pos[1], self.step)
             self.logger.log('eval/episode_target_x', target_pos[0], self.step)
             self.logger.log('eval/episode_target_y', target_pos[1], self.step)
+            episode_dist = l2_distance(initial_pos, target_pos)
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
@@ -110,9 +112,17 @@ class Workspace(object):
 #                self.video_recorder.record_rgb(self.env)
                 episode_reward += reward
 
+            if info['success'] > 0.5:
+                print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
+                self.env.target_dist_min +=0.5
+                self.env.target_dist_max +=0.5
+                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+                print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max)
+
             self.video_recorder.save(f'{self.step}.mp4')
             self.logger.log('eval/episode_reward', episode_reward, self.step)
             self.logger.log('eval/dist_to_goal', info['dist_to_goal'], self.step)
+            self.logger.log('eval/episode_dist', episode_dist, self.step)
             self.logger.log('eval/success', info['success'], self.step)
             self.logger.log('eval/spl', info['spl'], self.step)
             self.logger.log('eval/num_steps', info['episode_length'], self.step)
