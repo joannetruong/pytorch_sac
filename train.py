@@ -78,6 +78,9 @@ class Workspace(object):
             float(self.env.action_space.high.max())
         ]
         self.agent = hydra.utils.instantiate(cfg.agent)
+        if self.cfg.pretrained:
+            self.agent.load("/private/home/jtruong/repos/pytorch_sac_2/pytorch_sac/exp/2020.06.15/multi_goal_stadium_depth/model", "98900")
+            print('loading pretrained weights')
         self.replay_buffer = ReplayBuffer(self.env.observation_space["sensor"].shape,
                                           self.env.observation_space["depth"].shape,
                                           self.env.action_space.shape,
@@ -89,6 +92,7 @@ class Workspace(object):
         self.step = 0
 
     def evaluate(self):
+        success = []
         for episode in range(self.cfg.num_eval_episodes):
             obs = self.env.reset()
 #            obs = obs["sensor"][:2]
@@ -111,14 +115,7 @@ class Workspace(object):
                 self.video_recorder.record_depth(self.env)
 #                self.video_recorder.record_rgb(self.env)
                 episode_reward += reward
-
-            if info['success'] > 0.5:
-                print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
-                self.env.target_dist_min +=0.5
-                self.env.target_dist_max +=0.5
-                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
-                print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max)
-
+            success.append(info['success'])
             self.video_recorder.save(f'{self.step}.mp4')
             self.logger.log('eval/episode_reward', episode_reward, self.step)
             self.logger.log('eval/dist_to_goal', info['dist_to_goal'], self.step)
@@ -128,6 +125,17 @@ class Workspace(object):
             self.logger.log('eval/num_steps', info['episode_length'], self.step)
             self.logger.log('eval/num_collisions', info['collision_step'], self.step)
             self.logger.log('eval/path_length', info['path_length'], self.step)
+        avg_success = np.mean(np.asarray(success))
+        if avg_success > 0.5:
+            print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
+            if self.env.target_dist_max < 10:
+                self.env.target_dist_min +=0.5
+                self.env.target_dist_max +=0.5
+            else:
+                self.env.target_dist_min = 1
+                self.env.target_dist_max = 10
+            self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+            print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max)
         self.logger.dump(self.step)
 
     def run(self):
