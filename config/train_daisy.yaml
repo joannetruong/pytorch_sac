@@ -3,8 +3,6 @@ defaults:
 
 env: cheetah_run
 
-pytorch_sac_ae: true
-frame_stack: 3
 # this needs to be specified manually
 experiment: test_exp
 
@@ -29,8 +27,6 @@ save_buffer: true
 
 seed: 1
 
-encoder_type: pixel
-frame_stack: 3
 
 # hydra configuration
 hydra:
@@ -38,11 +34,5 @@ hydra:
     run:
         dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
 
-pretrained: False
-curriculum: True
-record_params: ['rgb', 'depth', 'map']
-
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
-gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_ae.yaml
-#gibson_cfg: /private/home/jtruong/repos/pytorch_sac_4/pytorch_sac/config/locobot_p2p_nav_house_sac_ae_stadium.yaml
-#gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_stadium.yaml
+gibson_cfg: /private/home/jtruong/repos/dynamics_aware_navigation/pytorch_sac/config/daisy_demo.yaml
