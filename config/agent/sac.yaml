@@ -31,6 +31,7 @@ agent:
     decoder_update_freq: 1
     decoder_latent_lambda: 1e-6
     decoder_weight_lambda: 1e-7
+    learnable_temperature: True
  
 double_q_critic:
   class: agent.critic.DoubleQCritic

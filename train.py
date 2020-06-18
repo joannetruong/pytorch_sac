@@ -95,7 +95,7 @@ class Workspace(object):
         episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
         for episode in range(self.cfg.num_eval_episodes):
             print('eval episode count: ', episode)
-            obs = self.env.reset()
+            obs = self.env.reset(eval=True)
 #            obs = obs["sensor"][:2]
             self.agent.reset()
             self.video_recorder.init(enabled=(episode == 0))
@@ -192,7 +192,8 @@ class Workspace(object):
                     action = self.agent.act(obs, sample=True)
 
             # run training update
-            if self.step >= self.cfg.num_seed_steps:
+#            if self.step >= self.cfg.num_seed_steps:
+            if self.step >= 1:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
 
             next_obs, reward, done, _ = self.env.step(action)

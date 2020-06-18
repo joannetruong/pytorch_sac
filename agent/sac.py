@@ -19,9 +19,10 @@ class SACAgent(Agent):
     def __init__(self, obs_dim, obs_shape, action_dim, action_range, device,
                  critic_cfg, actor_cfg, discount, init_temperature, alpha_lr,
                  alpha_betas, actor_lr, actor_betas, actor_update_frequency,
-                 critic_lr, critic_betas, critic_tau,
-                 critic_target_update_frequency, batch_size, encoder_feature_dim, num_layers, num_filters,
-                 encoder_lr, decoder_lr, decoder_type, encoder_tau, decoder_update_freq, decoder_latent_lambda, decoder_weight_lambda):
+                 critic_lr, critic_betas, critic_tau, critic_target_update_frequency, 
+                 batch_size, encoder_feature_dim, num_layers, num_filters, encoder_lr, 
+                 decoder_lr, decoder_type, encoder_tau, decoder_update_freq, 
+                 decoder_latent_lambda, decoder_weight_lambda, learnable_temperature):
         super().__init__()
 
         self.action_range = action_range
@@ -35,6 +36,7 @@ class SACAgent(Agent):
         self.decoder_update_freq = decoder_update_freq
         self.decoder_latent_lambda = decoder_latent_lambda
         self.decoder_weight_lambda = decoder_weight_lambda
+        self.learnable_temperature = learnable_temperature
 
         self.critic = hydra.utils.instantiate(critic_cfg).to(self.device)
         self.critic_target = hydra.utils.instantiate(critic_cfg).to(
@@ -151,13 +153,14 @@ class SACAgent(Agent):
 
         self.actor.log(logger, step)
 
-        self.log_alpha_optimizer.zero_grad()
-        alpha_loss = (self.alpha *
-                      (-log_prob - self.target_entropy).detach()).mean()
-        logger.log('train_alpha/loss', alpha_loss, step)
-        logger.log('train_alpha/value', self.alpha, step)
-        alpha_loss.backward()
-        self.log_alpha_optimizer.step()
+        if self.learnable_temperature:
+            self.log_alpha_optimizer.zero_grad()
+            alpha_loss = (self.alpha *
+                          (-log_prob - self.target_entropy).detach()).mean()
+            logger.log('train_alpha/loss', alpha_loss, step)
+            logger.log('train_alpha/value', self.alpha, step)
+            alpha_loss.backward()
+            self.log_alpha_optimizer.step()
 
     def update_decoder(self, obs, target_obs, logger, step):
 #        h = self.critic.encoder(obs["rgb"])
@@ -188,7 +191,6 @@ class SACAgent(Agent):
     def update(self, replay_buffer, logger, step):
         obs, action, reward, next_obs, not_done, not_done_no_max = replay_buffer.sample(
             self.batch_size)
-
         logger.log('train/batch_reward', reward.mean(), step)
 
         self.update_critic(obs, action, reward, next_obs, not_done_no_max,
