@@ -12,7 +12,9 @@ import pickle as pkl
 from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv
 from gibson2.data.utils import get_train_models
 import gibson2
-
+from daisy_toolkit.daisy_raibert_controller import DaisyRaibertController, BehaviorParameters
+import daisy_hardware.motion_library as motion_library
+import pybullet as p
 
 from video import VideoRecorder
 from logger import Logger
@@ -81,6 +83,14 @@ class Workspace(object):
         self.video_recorder = VideoRecorder(
             self.work_dir if cfg.save_video else None)
         self.step = 0
+        self.hz = 240
+        p.setTimeStep(1./self.hz)
+        self.daisy = self.env.robots[0]
+        self.daisy.set_position([0.0, 0.0, 0.3])
+        self.daisy.set_orientation([0, 0, 0, 1.])
+        self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
+        self.init_state = self.daisy.calc_state()
+        self.behavior = BehaviorParameters()
 
     def evaluate(self):
         for episode in range(self.cfg.num_eval_episodes):
@@ -97,7 +107,14 @@ class Workspace(object):
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
-                obs, reward, done, info = self.env.step(action)
+                self.behavior.target_speed = np.array([action[0], action[1]])
+                raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
+                time_per_step = 2*self.behavior.stance_duration
+                for i in range(time_per_step):
+                    raibert_action = raibert_controller.get_action(self.init_state, i+1)
+                    obs, reward, done, info = self.env.step(raibert_action)
+                    self.init_state = self.daisy.calc_state()
+#                obs, reward, done, info = self.env.step(action)
                 obs = obs["sensor"][:2]
                 self.video_recorder.record(self.env)
                 episode_reward += reward
@@ -157,7 +174,13 @@ class Workspace(object):
             if self.step >= self.cfg.num_seed_steps:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
 
-            next_obs, reward, done, _ = self.env.step(action)
+            self.behavior.target_speed = np.array([action[0], action[1]])
+            raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
+            time_per_step = 2*self.behavior.stance_duration
+            for i in range(time_per_step):
+                raibert_action = raibert_controller.get_action(self.init_state, i+1)
+                next_obs, reward, done, info = self.env.step(raibert_action)
+                self.init_state = self.daisy.calc_state()
             next_obs = next_obs["sensor"][:2]
             # allow infinite bootstrap
             done = float(done)
@@ -173,7 +196,7 @@ class Workspace(object):
 
 
 
-@hydra.main(config_path="config/train_locobot.yaml", strict=True)
+@hydra.main(config_path="config/train_daisy.yaml", strict=True)
 def main(cfg):
     workspace = Workspace(cfg)
     workspace.run()
