@@ -3,6 +3,7 @@ agent:
   class: agent.sac.SACAgent
   params:
     obs_dim: ??? # to be specified later
+    obs_shape: ??? # to be specified later
     action_dim: ??? # to be specified later
     action_range: ??? # to be specified later
     device: ${device}
@@ -20,20 +21,40 @@ agent:
     critic_tau: 0.005
     critic_target_update_frequency: 2
     batch_size: 1024
-    
+    encoder_feature_dim: 50
+    num_layers: 4
+    num_filters: 32
+    encoder_lr: 1e-3
+    decoder_lr: 1e-3
+    decoder_type: pixel
+    encoder_tau: 0.05
+    decoder_update_freq: 1
+    decoder_latent_lambda: 1e-6
+    decoder_weight_lambda: 1e-7
+ 
 double_q_critic:
   class: agent.critic.DoubleQCritic
   params:
     obs_dim: ${agent.params.obs_dim}
+    obs_shape: ${agent.params.obs_shape}
     action_dim: ${agent.params.action_dim}
     hidden_dim: 1024
     hidden_depth: 2
+    encoder_type: pixel
+    encoder_feature_dim: 50
+    num_layers: 4
+    num_filters: 32
     
 diag_gaussian_actor:
   class: agent.actor.DiagGaussianActor
   params:
     obs_dim: ${agent.params.obs_dim}
+    obs_shape: ${agent.params.obs_shape}
     action_dim: ${agent.params.action_dim}
     hidden_depth: 2
     hidden_dim: 1024
     log_std_bounds: [-5, 2]
+    encoder_type: pixel
+    encoder_feature_dim: 50
+    num_layers: 4
+    num_filters: 32

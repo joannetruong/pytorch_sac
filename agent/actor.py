@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch import distributions as pyd
 
 import utils
+from encoder import make_encoder
+from decoder import make_decoder
 
 
 class TanhTransform(pyd.transforms.Transform):
@@ -57,18 +59,34 @@ class SquashedNormal(pyd.transformed_distribution.TransformedDistribution):
 
 class DiagGaussianActor(nn.Module):
     """torch.distributions implementation of an diagonal Gaussian policy."""
-    def __init__(self, obs_dim, action_dim, hidden_dim, hidden_depth,
-                 log_std_bounds):
+    def __init__(self, obs_dim, obs_shape, action_dim, hidden_dim, hidden_depth,
+                 log_std_bounds, encoder_type, encoder_feature_dim, num_layers, num_filters):
         super().__init__()
 
+        self.encoder = make_encoder(
+            encoder_type, obs_shape, encoder_feature_dim, num_layers,
+            num_filters
+        )
+        self.tgt_embeding = nn.Linear(obs_dim+1, 32)
+        self.ln = nn.LayerNorm(32)
+
         self.log_std_bounds = log_std_bounds
-        self.trunk = utils.mlp(obs_dim, hidden_dim, 2 * action_dim,
+        dim = self.encoder.feature_dim + 32
+        self.trunk = utils.mlp(dim, hidden_dim, 2 * action_dim,
                                hidden_depth)
 
         self.outputs = dict()
         self.apply(utils.weight_init)
 
-    def forward(self, obs):
+    def forward(self, obs, detach_encoder=False):
+#        obs_rgb = self.encoder(obs["rgb"], detach=detach_encoder)
+        obs_img = self.encoder(obs["depth"], detach=detach_encoder)
+        sensor = torch.stack([obs["sensor"][:, 0], torch.cos(obs["sensor"][:, 1]), torch.sin(obs["sensor"][:, 1])], -1)
+        embed_sensor = self.tgt_embeding(sensor)
+        embed_sensor_norm = self.ln(embed_sensor)
+        obs_sensor = torch.tanh(embed_sensor_norm)
+        obs = torch.cat((obs_img, obs_sensor), 1)
+#        obs = torch.cat((obs_rgb, embed_sensor), 1)
         mu, log_std = self.trunk(obs).chunk(2, dim=-1)
 
         # constrain log_std inside [log_std_min, log_std_max]

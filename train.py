@@ -11,6 +11,7 @@ import time
 import pickle as pkl
 from gibson2.envs.locomotor_env import NavigateEnv, NavigateRandomEnv
 from gibson2.data.utils import get_train_models
+from gibson2.utils.utils import l2_distance
 import gibson2
 from daisy_toolkit.daisy_raibert_controller import DaisyRaibertController, BehaviorParameters
 import daisy_hardware.motion_library as motion_library
@@ -65,17 +66,25 @@ class Workspace(object):
 
         self.model_dir = utils.make_dir(os.path.join(self.work_dir, 'model'))
         self.buffer_dir = utils.make_dir(os.path.join(self.work_dir, 'buffer'))
-        print(self.env.observation_space)
-        cfg.agent.params.obs_dim = self.env.observation_space.spaces["sensor"].shape[0]-2
-        print(self.env.observation_space.spaces["sensor"].shape)
+        print("obs space: ", self.env.observation_space)
+        print("obs space shape: ", self.env.observation_space.shape)
+        if cfg.encoder_type == 'pixel':
+            self.env = utils.FrameStackDepth(self.env, k=cfg.frame_stack)
+        print("obs space: ", self.env.observation_space)
+
+        cfg.agent.params.obs_dim = self.env.observation_space["sensor"].shape[0]
+        cfg.agent.params.obs_shape = self.env.observation_space["depth"].shape
         cfg.agent.params.action_dim = self.env.action_space.shape[0]
         cfg.agent.params.action_range = [
             float(self.env.action_space.low.min()),
             float(self.env.action_space.high.max())
         ]
         self.agent = hydra.utils.instantiate(cfg.agent)
-        tmp = np.array([1, 2])
-        self.replay_buffer = ReplayBuffer(tmp.shape,
+        if self.cfg.pretrained:
+            self.agent.load("/private/home/jtruong/repos/pytorch_sac_2/pytorch_sac/exp/2020.06.15/multi_goal_stadium_depth/model", "98900")
+            print('loading pretrained weights')
+        self.replay_buffer = ReplayBuffer(self.env.observation_space["sensor"].shape,
+                                          self.env.observation_space["depth"].shape,
                                           self.env.action_space.shape,
                                           int(cfg.replay_buffer_capacity),
                                           self.device)
@@ -83,6 +92,8 @@ class Workspace(object):
         self.video_recorder = VideoRecorder(
             self.work_dir if cfg.save_video else None)
         self.step = 0
+        if self.cfg.curriculum:
+            self.env.set_min_max_dist(0.1, 0.5)
         self.hz = 240
         p.setTimeStep(1./self.hz)
         self.daisy = self.env.robots[0]
@@ -93,17 +104,22 @@ class Workspace(object):
         self.behavior = BehaviorParameters()
 
     def evaluate(self):
+        episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
         for episode in range(self.cfg.num_eval_episodes):
+            print('eval episode count: ', episode)
             obs = self.env.reset()
-            obs = obs["sensor"][:2]
+#            obs = obs["sensor"][:2]
             self.agent.reset()
             self.video_recorder.init(enabled=(episode == 0))
             done = False
             episode_reward = 0
-            self.logger.log('eval/episode_initial_x', self.env.initial_pos[0], self.step)
-            self.logger.log('eval/episode_initial_y', self.env.initial_pos[1], self.step)
-            self.logger.log('eval/episode_target_x', self.env.target_pos[0], self.step)
-            self.logger.log('eval/episode_target_y', self.env.target_pos[1], self.step)
+            initial_pos = self.env.get_initial_pos()
+            target_pos = self.env.get_target_pos()
+            #self.logger.log('eval/episode_initial_x', initial_pos[0], self.step)
+            #self.logger.log('eval/episode_initial_y', initial_pos[1], self.step)
+            #self.logger.log('eval/episode_target_x', target_pos[0], self.step)
+            #self.logger.log('eval/episode_target_y', target_pos[1], self.step)
+            episode_dist = l2_distance(initial_pos, target_pos)
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
@@ -114,19 +130,41 @@ class Workspace(object):
                     raibert_action = raibert_controller.get_action(self.init_state, i+1)
                     obs, reward, done, info = self.env.step(raibert_action)
                     self.init_state = self.daisy.calc_state()
-#                obs, reward, done, info = self.env.step(action)
-                obs = obs["sensor"][:2]
-                self.video_recorder.record(self.env)
+                self.video_recorder.record(self.env, self.cfg.record_params)
                 episode_reward += reward
-
-            self.video_recorder.save(f'{self.step}.mp4')
-            self.logger.log('eval/episode_reward', episode_reward, self.step)
-            self.logger.log('eval/dist_to_goal', info['dist_to_goal'], self.step)
-            self.logger.log('eval/success', info['success'], self.step)
-            self.logger.log('eval/spl', info['spl'], self.step)
-            self.logger.log('eval/num_steps', info['episode_length'], self.step)
-            self.logger.log('eval/num_collisions', info['collision_step'], self.step)
-            self.logger.log('eval/path_length', info['path_length'], self.step)
+            print('initial, target, dist, spl: ', initial_pos, target_pos, episode_dist, info["spl"])
+            self.video_recorder.save(f'{self.step}_{episode}_{episode_dist}_{info["spl"]}.mp4')
+            episode_rewards.append(episode_reward)
+            dist_to_goals.append(info['dist_to_goal'])
+            episode_dists.append(episode_dist)
+            successes.append(info['success'])
+            spls.append(info['spl'])
+            episode_lengths.append(info['episode_length'])
+            collision_steps.append(info['collision_step'])
+            path_lengths.append(info['path_length'])
+        avg_success = np.mean(np.asarray(successes))
+        if self.cfg.curriculum:
+            if avg_success > 0.5:
+                print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
+                if self.env.target_dist_max < 10:
+                    self.env.target_dist_min +=0.5
+                    self.env.target_dist_max +=0.5
+                else:
+                    self.env.target_dist_min = 1
+                    self.env.target_dist_max = 10
+                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+                print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'success: ', avg_success, 'step: ', self.step)
+        print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success)
+        self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
+        self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
+        self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
+        self.logger.log('eval/success', avg_success, self.step)
+        self.logger.log('eval/spl', np.mean(np.asarray(spls)), self.step)
+        self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
+        self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
+        self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         self.logger.dump(self.step)
 
     def run(self):
@@ -154,7 +192,7 @@ class Workspace(object):
                                 self.step)
 
                 obs = self.env.reset()
-                obs = obs["sensor"][:2]
+ #               obs = obs["sensor"][:2]
                 self.agent.reset()
                 done = False
                 episode_reward = 0
@@ -173,7 +211,6 @@ class Workspace(object):
             # run training update
             if self.step >= self.cfg.num_seed_steps:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
-
             self.behavior.target_speed = np.array([action[0], action[1]])
             raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
             time_per_step = 2*self.behavior.stance_duration
@@ -181,7 +218,6 @@ class Workspace(object):
                 raibert_action = raibert_controller.get_action(self.init_state, i+1)
                 next_obs, reward, done, info = self.env.step(raibert_action)
                 self.init_state = self.daisy.calc_state()
-            next_obs = next_obs["sensor"][:2]
             # allow infinite bootstrap
             done = float(done)
             done_no_max = 0 if episode_step + 1 == self.env.max_step else done

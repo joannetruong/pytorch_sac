@@ -7,26 +7,34 @@ import math
 
 from agent import Agent
 import utils
+from encoder import make_encoder
+from decoder import make_decoder
 
 import hydra
 
+LOG_FREQ = 10000
 
 class SACAgent(Agent):
     """SAC algorithm."""
-    def __init__(self, obs_dim, action_dim, action_range, device,
+    def __init__(self, obs_dim, obs_shape, action_dim, action_range, device,
                  critic_cfg, actor_cfg, discount, init_temperature, alpha_lr,
                  alpha_betas, actor_lr, actor_betas, actor_update_frequency,
                  critic_lr, critic_betas, critic_tau,
-                 critic_target_update_frequency, batch_size):
+                 critic_target_update_frequency, batch_size, encoder_feature_dim, num_layers, num_filters,
+                 encoder_lr, decoder_lr, decoder_type, encoder_tau, decoder_update_freq, decoder_latent_lambda, decoder_weight_lambda):
         super().__init__()
 
         self.action_range = action_range
         self.device = torch.device(device)
         self.discount = discount
         self.critic_tau = critic_tau
+        self.encoder_tau = encoder_tau
         self.actor_update_frequency = actor_update_frequency
         self.critic_target_update_frequency = critic_target_update_frequency
         self.batch_size = batch_size
+        self.decoder_update_freq = decoder_update_freq
+        self.decoder_latent_lambda = decoder_latent_lambda
+        self.decoder_weight_lambda = decoder_weight_lambda
 
         self.critic = hydra.utils.instantiate(critic_cfg).to(self.device)
         self.critic_target = hydra.utils.instantiate(critic_cfg).to(
@@ -39,6 +47,27 @@ class SACAgent(Agent):
         self.log_alpha.requires_grad = True
         # set target entropy to -|A|
         self.target_entropy = -action_dim
+
+        self.decoder = None
+        if decoder_type != 'identity':
+            # create decoder
+            self.decoder = make_decoder(
+                decoder_type, obs_shape, encoder_feature_dim, num_layers,
+                num_filters
+            ).to(device)
+            self.decoder.apply(utils.weight_init)
+
+            # optimizer for critic encoder for reconstruction loss
+            self.encoder_optimizer = torch.optim.Adam(
+                self.critic.encoder.parameters(), lr=encoder_lr
+            )
+
+            # optimizer for decoder
+            self.decoder_optimizer = torch.optim.Adam(
+                self.decoder.parameters(),
+                lr=decoder_lr,
+                weight_decay=decoder_weight_lambda
+            )
 
         # optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
@@ -60,14 +89,20 @@ class SACAgent(Agent):
         self.training = training
         self.actor.train(training)
         self.critic.train(training)
+        if self.decoder is not None:
+            self.decoder.train(training)
 
     @property
     def alpha(self):
         return self.log_alpha.exp()
 
     def act(self, obs, sample=False):
-        obs = torch.FloatTensor(obs).to(self.device)
-        obs = obs.unsqueeze(0)
+#        obs["rgb"] = torch.FloatTensor(obs["rgb"]).to(self.device)
+#        obs["rgb"] = obs["rgb"].unsqueeze(0)
+        obs["depth"] = torch.FloatTensor(obs["depth"]).to(self.device)
+        obs["depth"] = obs["depth"].unsqueeze(0)
+        obs["sensor"] = torch.FloatTensor(obs["sensor"][:2]).to(self.device)
+        obs["sensor"] = obs["sensor"].unsqueeze(0)
         dist = self.actor(obs)
         action = dist.sample() if sample else dist.mean
         action = action.clamp(*self.action_range)
@@ -97,10 +132,10 @@ class SACAgent(Agent):
         self.critic.log(logger, step)
 
     def update_actor_and_alpha(self, obs, logger, step):
-        dist = self.actor(obs)
+        dist = self.actor(obs, detach_encoder=True)
         action = dist.rsample()
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        actor_Q1, actor_Q2 = self.critic(obs, action)
+        actor_Q1, actor_Q2 = self.critic(obs, action, detach_encoder=True)
 
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_prob - actor_Q).mean()
@@ -124,6 +159,32 @@ class SACAgent(Agent):
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
 
+    def update_decoder(self, obs, target_obs, logger, step):
+#        h = self.critic.encoder(obs["rgb"])
+#        target_obs = target_obs["rgb"]
+        h = self.critic.encoder(obs["depth"])
+        target_obs = target_obs["depth"]
+        if target_obs.dim() == 4:
+            # preprocess images to be in [-0.5, 0.5] range
+            target_obs = utils.preprocess_obs(target_obs)
+        rec_obs = self.decoder(h)
+        rec_loss = F.mse_loss(target_obs, rec_obs)
+
+        # add L2 penalty on latent representation
+        # see https://arxiv.org/pdf/1903.12436.pdf
+        latent_loss = (0.5 * h.pow(2).sum(1)).mean()
+
+        loss = rec_loss + self.decoder_latent_lambda * latent_loss
+        self.encoder_optimizer.zero_grad()
+        self.decoder_optimizer.zero_grad()
+        loss.backward()
+
+        self.encoder_optimizer.step()
+        self.decoder_optimizer.step()
+        logger.log('train_ae/ae_loss', loss, step)
+
+        self.decoder.log(logger, step, log_freq=LOG_FREQ)
+
     def update(self, replay_buffer, logger, step):
         obs, action, reward, next_obs, not_done, not_done_no_max = replay_buffer.sample(
             self.batch_size)
@@ -140,6 +201,9 @@ class SACAgent(Agent):
             utils.soft_update_params(self.critic, self.critic_target,
                                      self.critic_tau)
 
+        if self.decoder is not None and step % self.decoder_update_freq == 0:
+            self.update_decoder(obs, obs, logger, step)
+
     def save(self, model_dir, step):
         torch.save(
             self.actor.state_dict(), '%s/actor_%s.pt' % (model_dir, step)
@@ -147,11 +211,11 @@ class SACAgent(Agent):
         torch.save(
             self.critic.state_dict(), '%s/critic_%s.pt' % (model_dir, step)
         )
-        # if self.decoder is not None:
-        #     torch.save(
-        #         self.decoder.state_dict(),
-        #         '%s/decoder_%s.pt' % (model_dir, step)
-        #     )
+        if self.decoder is not None:
+            torch.save(
+                self.decoder.state_dict(),
+                '%s/decoder_%s.pt' % (model_dir, step)
+            )
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(
@@ -160,7 +224,7 @@ class SACAgent(Agent):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
-        # if self.decoder is not None:
-        #     self.decoder.load_state_dict(
-        #         torch.load('%s/decoder_%s.pt' % (model_dir, step))
-        #     )
+        if self.decoder is not None:
+            self.decoder.load_state_dict(
+                torch.load('%s/decoder_%s.pt' % (model_dir, step))
+            )

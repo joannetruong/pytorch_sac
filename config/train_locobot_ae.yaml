@@ -38,11 +38,7 @@ hydra:
     run:
         dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
 
-pretrained: False
-curriculum: True
-record_params: ['rgb', 'depth', 'map']
-
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
-gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_ae.yaml
-#gibson_cfg: /private/home/jtruong/repos/pytorch_sac_4/pytorch_sac/config/locobot_p2p_nav_house_sac_ae_stadium.yaml
+#gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_ae.yaml
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_stadium.yaml
+gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac_ae_stadium.yaml
