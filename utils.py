@@ -277,8 +277,9 @@ class FrameStackDepth(gym.Wrapper):
         gym.Wrapper.__init__(self, env)
         self._k = k
         self._frames = deque([], maxlen=k)
-        h, w, c = env.observation_space.spaces["depth"].shape
-        depth_shp = (c, h, w)
+        self.height, self.width, self.channels = env.observation_space.spaces["depth"].shape
+        
+        depth_shp = (self.channels, self.height, self.width)
         sensor = np.array([1, 2])
         s_shp = sensor.shape
         self.sensor_space = gym.spaces.Box(low=-np.inf,
@@ -319,10 +320,22 @@ class FrameStackDepth(gym.Wrapper):
         obs["depth"] = np.concatenate(list(self._frames), axis=0)
         return obs
 
+    def get_rgb(self):
+        frame = self.env.get_rgb()
+        frame = (frame * 255).round()
+        return frame
+
     def get_depth(self):
         frame = self.env.get_depth()
         frame = (frame * 255).round()
         return frame
+
+    def get_map(self):
+        frame = self.env.get_top_down_map()
+        return frame
+
+    def get_resolution(self):
+        return self.height, self.width
 
     def get_initial_pos(self):
         return self.env.initial_pos
