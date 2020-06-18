@@ -90,6 +90,8 @@ class Workspace(object):
         self.video_recorder = VideoRecorder(
             self.work_dir if cfg.save_video else None)
         self.step = 0
+        if self.cfg.curriculum:
+            self.env.set_min_max_dist(0.1, 0.5)
 
     def evaluate(self):
         episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
@@ -127,16 +129,17 @@ class Workspace(object):
             collision_steps.append(info['collision_step'])
             path_lengths.append(info['path_length'])
         avg_success = np.mean(np.asarray(successes))
-        if avg_success > 0.5:
-            print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
-            if self.env.target_dist_max < 10:
-                self.env.target_dist_min +=0.5
-                self.env.target_dist_max +=0.5
-            else:
-                self.env.target_dist_min = 1
-                self.env.target_dist_max = 10
-            self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
-            print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'success: ', avg_success, 'step: ', self.step)
+        if self.cfg.curriculum:
+            if avg_success > 0.5:
+                print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
+                if self.env.target_dist_max < 10:
+                    self.env.target_dist_min +=0.5
+                    self.env.target_dist_max +=0.5
+                else:
+                    self.env.target_dist_min = 1
+                    self.env.target_dist_max = 10
+                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+                print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'success: ', avg_success, 'step: ', self.step)
         print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success)
         self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
         self.logger.log('eval/max_dist', self.env.target_dist_min, self.step)

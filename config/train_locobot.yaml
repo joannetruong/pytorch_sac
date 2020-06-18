@@ -39,6 +39,7 @@ hydra:
         dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
 
 pretrained: False
+curriculum: True
 record_params: ['rgb', 'depth', 'map']
 
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
