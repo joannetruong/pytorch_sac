@@ -300,8 +300,8 @@ class FrameStackDepth(gym.Wrapper):
         self.target_dist_min = env.target_dist_min
         self.target_dist_max = env.target_dist_max
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, eval=False):
+        obs = self.env.reset(eval)
         obs["depth"] = (obs["depth"] * 255).round().astype(np.uint8)
         obs["depth"] = np.moveaxis(obs["depth"], 2, 0)
         for _ in range(self._k):
