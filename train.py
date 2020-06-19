@@ -115,10 +115,6 @@ class Workspace(object):
             episode_reward = 0
             initial_pos = self.env.get_initial_pos()
             target_pos = self.env.get_target_pos()
-            #self.logger.log('eval/episode_initial_x', initial_pos[0], self.step)
-            #self.logger.log('eval/episode_initial_y', initial_pos[1], self.step)
-            #self.logger.log('eval/episode_target_x', target_pos[0], self.step)
-            #self.logger.log('eval/episode_target_y', target_pos[1], self.step)
             episode_dist = l2_distance(initial_pos, target_pos)
             while not done:
                 with utils.eval_mode(self.agent):
@@ -131,10 +127,10 @@ class Workspace(object):
                     raibert_action = raibert_controller.get_action(self.init_state, i+1)
                     obs, reward, done, info = self.env.step(raibert_action, low_level=True)
                     self.init_state = self.daisy.calc_state()
+                    self.video_recorder.record(self.env, self.cfg.record_params)
 #                action_end = time.time()
 #                print('time for 1 action: ', action_end-action_start)
                 self.env.increase_step()
-                self.video_recorder.record(self.env, self.cfg.record_params)
                 episode_reward += reward
             print('INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
             self.video_recorder.save(f'{self.step}_{episode}_{episode_dist}_{info["spl"]}.mp4')
@@ -146,8 +142,33 @@ class Workspace(object):
             episode_lengths.append(info['episode_length'])
             collision_steps.append(info['collision_step'])
             path_lengths.append(info['path_length'])
-        avg_success = np.mean(np.asarray(successes))
+        self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
+        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
+        self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
+        self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
+        self.logger.log('eval/success', np.mean(np.asarray(successes)), self.step)
+        self.logger.log('eval/spl', np.mean(np.asarray(spls)), self.step)
+        self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
+        self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
+        self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         if self.cfg.curriculum:
+            curriculum_successes = []
+            for episode in range(self.cfg.num_curriculum_eval_episodes):
+                obs = self.env.reset()
+                self.agent.reset()
+                done = False
+                episode_reward = 0
+                initial_pos = self.env.get_initial_pos()
+                target_pos = self.env.get_target_pos()
+                episode_dist = l2_distance(initial_pos, target_pos)
+                while not done:
+                    with utils.eval_mode(self.agent):
+                        action = self.agent.act(obs, sample=False)
+                    obs, reward, done, info = self.env.step(action)
+                    episode_reward += reward
+                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
+                curriculum_successes.append(info['success'])
             if avg_success > 0.5:
                 print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
                 if self.env.target_dist_max < 10:
@@ -160,16 +181,6 @@ class Workspace(object):
             else:
                 self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
         print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success, 'step: ', self.step)
-        self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
-        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
-        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
-        self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
-        self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
-        self.logger.log('eval/success', avg_success, self.step)
-        self.logger.log('eval/spl', np.mean(np.asarray(spls)), self.step)
-        self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
-        self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
-        self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         self.logger.dump(self.step)
 
     def run(self):
@@ -196,6 +207,15 @@ class Workspace(object):
                 episode += 1
 
                 self.logger.log('train/episode', episode, self.step)
+
+            # evaluate agent periodically
+            if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
+                self.logger.log('eval/episode', episode, self.step)
+                self.evaluate()
+                if self.cfg.save_model:
+                    self.agent.save(self.model_dir, self.step)
+                if self.cfg.save_buffer:
+                    self.replay_buffer.save(self.buffer_dir)
 
             # sample action for data collection
             if self.step < self.cfg.num_seed_steps:
@@ -227,23 +247,14 @@ class Workspace(object):
             self.replay_buffer.add(obs, action, reward, next_obs, done,
                                    done_no_max)
 
-            # evaluate agent periodically
-            if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
-                self.logger.log('eval/episode', episode, self.step)
-                self.evaluate()
-                if self.cfg.save_model:
-                    self.agent.save(self.model_dir, self.step)
-                if self.cfg.save_buffer:
-                    self.replay_buffer.save(self.buffer_dir)
-
             obs = next_obs
             episode_step += 1
             self.step += 1
 
 
 
-#@hydra.main(config_path="config/train_daisy.yaml", strict=True)
-@hydra.main(config_path="config/train_locobot.yaml", strict=True)
+@hydra.main(config_path="config/train_daisy.yaml", strict=True)
+#@hydra.main(config_path="config/train_locobot.yaml", strict=True)
 def main(cfg):
     workspace = Workspace(cfg)
     workspace.run()
