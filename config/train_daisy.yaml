@@ -27,12 +27,18 @@ save_buffer: true
 
 seed: 1
 
+encoder_type: pixel
+frame_stack: 3
 
 # hydra configuration
 hydra:
     name: ${env}
     run:
         dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
+
+record_params: ['rgb', 'depth', 'map']
+pretrained: False
+curriculum: False
 
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
 gibson_cfg: /private/home/jtruong/repos/dynamics_aware_navigation/pytorch_sac/config/daisy_demo.yaml

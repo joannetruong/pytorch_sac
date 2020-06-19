@@ -184,6 +184,7 @@ class FrameStack(gym.Wrapper):
         self.observation_space['rgb'] = self.rgb_space
 #        self._max_episode_steps = env._max_episode_steps
         self.max_step = env.max_step
+        self.robot = env.robot
 
     def reset(self):
         obs = self.env.reset()
@@ -299,17 +300,20 @@ class FrameStackDepth(gym.Wrapper):
         self.max_step = env.max_step
         self.target_dist_min = env.target_dist_min
         self.target_dist_max = env.target_dist_max
+        self.current_step = env.current_step
+        self.robot = env.robots[0]
+        self.high_level_action_space = env.robots[0].high_level_action_space
 
-    def reset(self):
-        obs = self.env.reset()
+    def reset(self, eval=False):
+        obs = self.env.reset(eval)
         obs["depth"] = (obs["depth"] * 255).round().astype(np.uint8)
         obs["depth"] = np.moveaxis(obs["depth"], 2, 0)
         for _ in range(self._k):
             self._frames.append(obs["depth"])
         return self._get_obs(obs)
 
-    def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+    def step(self, action, low_level=False):
+        obs, reward, done, info = self.env.step(action, low_level)
         obs["depth"] = (obs["depth"] * 255).round().astype(np.uint8)
         obs["depth"] = np.moveaxis(obs["depth"], 2, 0)
         self._frames.append(obs["depth"])
@@ -346,3 +350,11 @@ class FrameStackDepth(gym.Wrapper):
     def set_min_max_dist(self, min, max):
         self.env.target_dist_min = min
         self.env.target_dist_max = max
+        self.target_dist_min = min
+        self.target_dist_max = max
+
+    def increase_step(self):
+        self.env.current_step +=1
+
+    def get_current_step(self):
+        return self.env.current_step

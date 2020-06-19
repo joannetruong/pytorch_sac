@@ -66,4 +66,5 @@ class VideoRecorder(object):
 
     def save(self, file_name):
         path = os.path.join(self.save_dir, file_name)
+        print('len frames: ', len(self.frames))
         imageio.mimsave(path, self.frames, fps=self.fps)

@@ -74,10 +74,10 @@ class Workspace(object):
 
         cfg.agent.params.obs_dim = self.env.observation_space["sensor"].shape[0]
         cfg.agent.params.obs_shape = self.env.observation_space["depth"].shape
-        cfg.agent.params.action_dim = self.env.action_space.shape[0]
+        cfg.agent.params.action_dim = self.env.high_level_action_space.shape[0]
         cfg.agent.params.action_range = [
-            float(self.env.action_space.low.min()),
-            float(self.env.action_space.high.max())
+            float(self.env.high_level_action_space.low.min()),
+            float(self.env.high_level_action_space.high.max())
         ]
         self.agent = hydra.utils.instantiate(cfg.agent)
         if self.cfg.pretrained:
@@ -85,7 +85,7 @@ class Workspace(object):
             print('loading pretrained weights')
         self.replay_buffer = ReplayBuffer(self.env.observation_space["sensor"].shape,
                                           self.env.observation_space["depth"].shape,
-                                          self.env.action_space.shape,
+                                          self.env.high_level_action_space.shape,
                                           int(cfg.replay_buffer_capacity),
                                           self.device)
 
@@ -96,7 +96,7 @@ class Workspace(object):
             self.env.set_min_max_dist(0.1, 0.5)
         self.hz = 240
         p.setTimeStep(1./self.hz)
-        self.daisy = self.env.robots[0]
+        self.daisy = self.env.robot
         self.daisy.set_position([0.0, 0.0, 0.3])
         self.daisy.set_orientation([0, 0, 0, 1.])
         self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
@@ -106,8 +106,8 @@ class Workspace(object):
     def evaluate(self):
         episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
         for episode in range(self.cfg.num_eval_episodes):
-            print('eval episode count: ', episode)
-            obs = self.env.reset()
+            print('eval episode count: ', episode, self.step)
+            obs = self.env.reset(eval=True)
 #            obs = obs["sensor"][:2]
             self.agent.reset()
             self.video_recorder.init(enabled=(episode == 0))
@@ -126,13 +126,17 @@ class Workspace(object):
                 self.behavior.target_speed = np.array([action[0], action[1]])
                 raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
                 time_per_step = 2*self.behavior.stance_duration
+#                action_start = time.time()
                 for i in range(time_per_step):
                     raibert_action = raibert_controller.get_action(self.init_state, i+1)
-                    obs, reward, done, info = self.env.step(raibert_action)
+                    obs, reward, done, info = self.env.step(raibert_action, low_level=True)
                     self.init_state = self.daisy.calc_state()
+#                action_end = time.time()
+#                print('time for 1 action: ', action_end-action_start)
+                self.env.increase_step()
                 self.video_recorder.record(self.env, self.cfg.record_params)
                 episode_reward += reward
-            print('initial, target, dist, spl: ', initial_pos, target_pos, episode_dist, info["spl"])
+            print('INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
             self.video_recorder.save(f'{self.step}_{episode}_{episode_dist}_{info["spl"]}.mp4')
             episode_rewards.append(episode_reward)
             dist_to_goals.append(info['dist_to_goal'])
@@ -153,10 +157,11 @@ class Workspace(object):
                     self.env.target_dist_min = 1
                     self.env.target_dist_max = 10
                 self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
-                print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'success: ', avg_success, 'step: ', self.step)
-        print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success)
+            else:
+                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+        print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success, 'step: ', self.step)
         self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
-        self.logger.log('eval/max_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
         self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
         self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
         self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
@@ -179,15 +184,6 @@ class Workspace(object):
                     self.logger.dump(
                         self.step, save=(self.step > self.cfg.num_seed_steps))
 
-                # evaluate agent periodically
-                if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
-                    self.logger.log('eval/episode', episode, self.step)
-                    self.evaluate()
-                    if self.cfg.save_model:
-                        self.agent.save(self.model_dir, self.step)
-                    if self.cfg.save_buffer:
-                        self.replay_buffer.save(self.buffer_dir)
-
                 self.logger.log('train/episode_reward', episode_reward,
                                 self.step)
 
@@ -203,7 +199,7 @@ class Workspace(object):
 
             # sample action for data collection
             if self.step < self.cfg.num_seed_steps:
-                action = self.env.action_space.sample()
+                action = self.env.high_level_action_space.sample()
             else:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=True)
@@ -214,10 +210,15 @@ class Workspace(object):
             self.behavior.target_speed = np.array([action[0], action[1]])
             raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
             time_per_step = 2*self.behavior.stance_duration
+#            action_start = time.time()
             for i in range(time_per_step):
                 raibert_action = raibert_controller.get_action(self.init_state, i+1)
-                next_obs, reward, done, info = self.env.step(raibert_action)
+                next_obs, reward, done, info = self.env.step(raibert_action, low_level=True)
                 self.init_state = self.daisy.calc_state()
+#            action_end = time.time()
+#            print('time for 1 action: ', action_end-action_start)
+            self.env.increase_step()
+            current_step = self.env.get_current_step()
             # allow infinite bootstrap
             done = float(done)
             done_no_max = 0 if episode_step + 1 == self.env.max_step else done
@@ -226,13 +227,23 @@ class Workspace(object):
             self.replay_buffer.add(obs, action, reward, next_obs, done,
                                    done_no_max)
 
+            # evaluate agent periodically
+            if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
+                self.logger.log('eval/episode', episode, self.step)
+                self.evaluate()
+                if self.cfg.save_model:
+                    self.agent.save(self.model_dir, self.step)
+                if self.cfg.save_buffer:
+                    self.replay_buffer.save(self.buffer_dir)
+
             obs = next_obs
             episode_step += 1
             self.step += 1
 
 
 
-@hydra.main(config_path="config/train_daisy.yaml", strict=True)
+#@hydra.main(config_path="config/train_daisy.yaml", strict=True)
+@hydra.main(config_path="config/train_locobot.yaml", strict=True)
 def main(cfg):
     workspace = Workspace(cfg)
     workspace.run()

@@ -1,5 +1,6 @@
 # scene
 scene: stadium
+#scene: building
 #model_id: Woonsocket
 #is_interactive: false
 #build_graph: true
@@ -27,7 +28,7 @@ success_reward: 10.0
 slack_reward: -0.01
 potential_reward_weight: 1.0
 collision_reward_weight: -0.1
-collision_ignore_link_a_ids: [1, 2, 3, 4]  # ignore collisions with these robot links
+collision_ignore_link_a_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 23, 25, 27, 29, 32, 34, 36, 38, 41, 43, 45, 47, 50, 52, 54, 56] # ignore collisions with these robot links
 
 # discount factor
 discount_factor: 0.99
@@ -45,8 +46,8 @@ output: [sensor, rgb, depth]
 # ASUS Xtion PRO LIVE
 # https://www.asus.com/us/3D-Sensor/Xtion_PRO_LIVE
 fisheye: false
-image_width: 640
-image_height: 480
+image_width: 84
+image_height: 84
 vertical_fov: 45
 # depth
 depth_low: 0.8
