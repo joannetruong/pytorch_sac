@@ -97,7 +97,7 @@ class Workspace(object):
         self.hz = 240
         p.setTimeStep(1./self.hz)
         self.daisy = self.env.robot
-        self.daisy.set_position([0.0, 0.0, 0.3])
+        self.daisy.set_position([3.0, 3.0, 0.3])
         self.daisy.set_orientation([0, 0, 0, 1.])
         self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
         self.init_state = self.daisy.calc_state()
@@ -120,13 +120,16 @@ class Workspace(object):
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
                 self.behavior.target_speed = np.array([action[0], action[1]])
+#                self.behavior.target_speed = np.array([0.0, 0.3])
                 raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
                 time_per_step = 2*self.behavior.stance_duration
+                self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
 #                action_start = time.time()
                 for i in range(time_per_step):
                     raibert_action = raibert_controller.get_action(self.init_state, i+1)
                     obs, reward, done, info = self.env.step(raibert_action, low_level=True)
                     self.init_state = self.daisy.calc_state()
+#                    print('init_state velocity: ', i, self.init_state['base_velocity'], self.init_state['base_pos_x'], self.init_state['base_pos_y'], self.init_state['base_pos_z'])
                     self.video_recorder.record(self.env, self.cfg.record_params)
 #                action_end = time.time()
 #                print('time for 1 action: ', action_end-action_start)
@@ -231,6 +234,7 @@ class Workspace(object):
             raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
             time_per_step = 2*self.behavior.stance_duration
 #            action_start = time.time()
+            self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
             for i in range(time_per_step):
                 raibert_action = raibert_controller.get_action(self.init_state, i+1)
                 next_obs, reward, done, info = self.env.step(raibert_action, low_level=True)
