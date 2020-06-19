@@ -15,6 +15,7 @@ num_seed_steps: 5000
 
 eval_frequency: 500
 num_eval_episodes: 50
+num_curriculum_eval_episodes: 10
 
 device: cuda
 

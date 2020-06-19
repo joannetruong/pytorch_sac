@@ -37,9 +37,9 @@ reset_initial_pos_only: True
 
 # sensor
 output: [sensor, rgb, depth]
-resolution: 640
-image_height: 360
-image_width: 640
+#resolution: 640
+image_height: 84
+image_width: 84
 fov: 69.4
 
 # display

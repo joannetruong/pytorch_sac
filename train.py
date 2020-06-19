@@ -95,7 +95,6 @@ class Workspace(object):
     def evaluate(self):
         episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
         for episode in range(self.cfg.num_eval_episodes):
-            print('eval episode count: ', episode, self.step)
             obs = self.env.reset(eval=True)
 #            obs = obs["sensor"][:2]
             self.agent.reset()
@@ -104,10 +103,6 @@ class Workspace(object):
             episode_reward = 0
             initial_pos = self.env.get_initial_pos()
             target_pos = self.env.get_target_pos()
-            #self.logger.log('eval/episode_initial_x', initial_pos[0], self.step)
-            #self.logger.log('eval/episode_initial_y', initial_pos[1], self.step)
-            #self.logger.log('eval/episode_target_x', target_pos[0], self.step)
-            #self.logger.log('eval/episode_target_y', target_pos[1], self.step)
             episode_dist = l2_distance(initial_pos, target_pos)
             while not done:
                 with utils.eval_mode(self.agent):
@@ -115,7 +110,7 @@ class Workspace(object):
                 obs, reward, done, info = self.env.step(action)
                 self.video_recorder.record(self.env, self.cfg.record_params)
                 episode_reward += reward
-            print('INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
+            print('Evaluation. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], 'EPISODE: ', episode, 'STEP: ', self.step)
             self.video_recorder.save(f'{self.step}_{episode}_{episode_dist}_{info["spl"]}.mp4')
             episode_rewards.append(episode_reward)
             dist_to_goals.append(info['dist_to_goal'])
@@ -125,9 +120,34 @@ class Workspace(object):
             episode_lengths.append(info['episode_length'])
             collision_steps.append(info['collision_step'])
             path_lengths.append(info['path_length'])
-        avg_success = np.mean(np.asarray(successes))
+        self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
+        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
+        self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
+        self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
+        self.logger.log('eval/success', np.mean(np.asarray(successes)), self.step)
+        self.logger.log('eval/spl', np.mean(np.asarray(spls)), self.step)
+        self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
+        self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
+        self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         if self.cfg.curriculum:
-            if avg_success > 0.5:
+            curriculum_successes = []
+            for episode in range(self.cfg.num_curriculum_eval_episodes):
+                obs = self.env.reset()
+                self.agent.reset()
+                done = False
+                episode_reward = 0
+                initial_pos = self.env.get_initial_pos()
+                target_pos = self.env.get_target_pos()
+                episode_dist = l2_distance(initial_pos, target_pos)
+                while not done:
+                    with utils.eval_mode(self.agent):
+                        action = self.agent.act(obs, sample=False)
+                    obs, reward, done, info = self.env.step(action)
+                    episode_reward += reward
+                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
+                curriculum_successes.append(info['success'])
+            if np.mean(np.asarray(curriculum_successes.append)) > 0.5:
                 print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
                 if self.env.target_dist_max < 10:
                     self.env.target_dist_min +=0.5
@@ -139,16 +159,6 @@ class Workspace(object):
             else:
                 self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
         print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', avg_success, 'step: ', self.step)
-        self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
-        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
-        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
-        self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
-        self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
-        self.logger.log('eval/success', avg_success, self.step)
-        self.logger.log('eval/spl', np.mean(np.asarray(spls)), self.step)
-        self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
-        self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
-        self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         self.logger.dump(self.step)
 
     def run(self):
