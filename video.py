@@ -2,6 +2,7 @@ import imageio
 import os
 import numpy as np
 import sys
+from PIL import Image
 
 import utils
 
@@ -39,7 +40,7 @@ class VideoRecorder(object):
         return depth_frame
 
     def record_map(self, env):
-        map_frame = env.get_map()
+        map_frame = env.get_top_down_map()
 #        map_frame =  map_frame.squeeze().astype(np.uint8)
 #        map_frame = np.stack([map_frame for _ in range(3)], axis=2)
         return map_frame.astype(np.uint8)
