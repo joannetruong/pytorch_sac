@@ -39,7 +39,7 @@ def make_gibson_env(cfg):
     sim2real_track = 'static'
     env = NavigateRandomEnvSim2Real(config_file=cfg.gibson_cfg,
                                     mode='headless',
-                                    action_timestep=1.0 / 10.0,
+                                    action_timestep=1.0 / 60.0,
                                     physics_timestep=1.0 / 40.0,
                                     track=sim2real_track)
 

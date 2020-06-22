@@ -83,10 +83,12 @@ class Workspace(object):
         self.video_recorder = VideoRecorder(
             self.work_dir if cfg.save_video else None)
         self.step = 0
+        if self.cfg.curriculum:
+            self.env.set_min_max_dist(0.1, 0.5)
         self.hz = 240
         p.setTimeStep(1./self.hz)
         self.daisy = self.env.robots[0]
-        self.daisy.set_position([0.0, 0.0, 0.3])
+        self.daisy.set_position([3.0, 3.0, 0.3])
         self.daisy.set_orientation([0, 0, 0, 1.])
         self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
         self.init_state = self.daisy.calc_state()
@@ -95,7 +97,7 @@ class Workspace(object):
     def evaluate(self):
         episode_rewards, dist_to_goals, episode_dists, successes, spls, episode_lengths, collision_steps, path_lengths = [], [], [], [], [], [], [], []
         for episode in range(self.cfg.num_eval_episodes):
-            obs = self.env.reset()
+            obs = self.env.reset(eval=True)
             obs = obs["sensor"][:2]
             self.agent.reset()
             self.video_recorder.init(enabled=(episode == 0))
@@ -181,7 +183,7 @@ class Workspace(object):
             else:
                 self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
             print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg curriculum success: ', np.mean(np.asarray(curriculum_successes)), 'step: ', self.step)
-        print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg success: ', np.mean(np.asarray(successes)), 'step: ', self.step)
+        print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg eval success: ', np.mean(np.asarray(successes)), 'step: ', self.step)
 
 
     def run(self):

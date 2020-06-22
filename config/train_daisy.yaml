@@ -11,8 +11,9 @@ replay_buffer_capacity: ${num_train_steps}
 
 num_seed_steps: 5000
 
-eval_frequency: 1
-num_eval_episodes: 10
+eval_frequency: 1000
+num_eval_episodes: 10 
+num_curriculum_eval_episodes: 10
 
 device: cuda
 
@@ -41,4 +42,4 @@ pretrained: False
 curriculum: True
 
 #gibson_cfg: /private/home/jtruong/repos/pytorch_sac/config/locobot_p2p_nav_house_sac.yaml
-gibson_cfg: /private/home/jtruong/repos/dynamics_aware_navigation/pytorch_sac_3/pytorch_sac/config/daisy_demo.yaml
+gibson_cfg: /private/home/jtruong/repos/dynamics_aware_navigation/daisy_state_2/pytorch_sac/config/daisy_demo.yaml
