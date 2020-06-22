@@ -130,9 +130,11 @@ class Workspace(object):
         self.logger.log('eval/num_steps', np.mean(np.asarray(episode_lengths)), self.step)
         self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
         self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
-        self.logger.dump(self.step)
+#        self.logger.dump(self.step)
 
         if self.cfg.curriculum:
+            self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+            print('EVAL CURRICULUM: min, max: ', self.env.target_dist_min, self.env.target_dist_max)
             curriculum_successes = []
             for episode in range(self.cfg.num_curriculum_eval_episodes):
                 obs = self.env.reset()
@@ -167,13 +169,26 @@ class Workspace(object):
         episode, episode_reward, done = 0, 0, True
         start_time = time.time()
         while self.step < self.cfg.num_train_steps:
+            # evaluate agent periodically
+            if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
+#                self.logger.dump(self.step)
+                self.logger.log('eval/episode', episode, self.step)
+                self.evaluate()
+                if self.cfg.save_model:
+                    self.agent.save(self.model_dir, self.step)
+                if self.cfg.save_buffer:
+                    self.replay_buffer.save(self.buffer_dir)
+
             if done:
                 if self.step > 0:
                     self.logger.log('train/duration',
                                     time.time() - start_time, self.step)
-                    start_time = time.time()
-                    self.logger.dump(
-                        self.step, save=(self.step > self.cfg.num_seed_steps))
+#                    start_time = time.time()
+#                    self.logger.dump(
+#                        self.step, save=(self.step > self.cfg.num_seed_steps))
+
+                self.logger.log('train/episode_reward', episode_reward,
+                                    self.step)
 
                 obs = self.env.reset()
  #               obs = obs["sensor"][:2]
@@ -184,8 +199,6 @@ class Workspace(object):
                 episode += 1
 
                 self.logger.log('train/episode', episode, self.step)
-                self.logger.log('train/episode_reward', episode_reward,
-                                    self.step)
 
             # sample action for data collection
             if self.step < self.cfg.num_seed_steps:
@@ -205,19 +218,10 @@ class Workspace(object):
 
             self.replay_buffer.add(obs, action, reward, next_obs, done,
                                    done_no_max)
-            # evaluate agent periodically
-            if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
-                self.logger.log('eval/episode', episode, self.step)
-                self.evaluate()
-                if self.cfg.save_model:
-                    self.agent.save(self.model_dir, self.step)
-                if self.cfg.save_buffer:
-                    self.replay_buffer.save(self.buffer_dir)
 
             obs = next_obs
             episode_step += 1
             self.step += 1
-
 
 
 @hydra.main(config_path="config/train_locobot.yaml", strict=True)

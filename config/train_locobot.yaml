@@ -13,7 +13,7 @@ replay_buffer_capacity: ${num_train_steps}
 
 num_seed_steps: 5000
 
-eval_frequency: 500
+eval_frequency: 10000
 num_eval_episodes: 50
 num_curriculum_eval_episodes: 10
 
