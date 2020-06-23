@@ -94,7 +94,6 @@ class Workspace(object):
             initial_pos = self.eval_env.get_initial_pos()
             target_pos = self.eval_env.get_target_pos()
             episode_dist = l2_distance(initial_pos, target_pos)
-            print('Evaluation. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], ' STEP: ', self.step, ' MIN: ', self.eval_env.target_dist_min, ' MAX:', self.eval_env.target_dist_max)
             while not done:
                 with utils.eval_mode(self.agent):
                     action = self.agent.act(obs, sample=False)
@@ -108,6 +107,7 @@ class Workspace(object):
                 self.video_recorder.record(self.eval_env, self.cfg.record_params)
                 self.eval_env.increase_step()
                 episode_reward += reward
+            print('Evaluation. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], ' STEP: ', self.step, ' MIN: ', self.eval_env.target_dist_min, ' MAX:', self.eval_env.target_dist_max)
             self.video_recorder.save(f'{self.step}_{episode}_{episode_dist}_{info["spl"]}.mp4')
             episode_rewards.append(episode_reward)
             dist_to_goals.append(info['dist_to_goal'])
@@ -118,8 +118,8 @@ class Workspace(object):
             collision_steps.append(info['collision_step'])
             path_lengths.append(info['path_length'])
         self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
-        self.logger.log('eval/min_dist', self.eval_env.target_dist_min, self.step)
-        self.logger.log('eval/max_dist', self.eval_env.target_dist_max, self.step)
+        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
         self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
         self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
         self.logger.log('eval/success', np.mean(np.asarray(successes)), self.step)
@@ -128,8 +128,8 @@ class Workspace(object):
         self.logger.log('eval/num_collisions', np.mean(np.asarray(collision_steps)), self.step)
         self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
         self.logger.dump(self.step, ty='eval')
-
         print('Evaluation. Avg Eval Success: ', np.mean(np.asarray(successes)), 'Step: ', self.step, ' Min: ', self.eval_env.target_dist_min, ' Max: ', self.eval_env.target_dist_max)
+
         if self.cfg.curriculum:
             self.eval_env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
             curriculum_successes = []
@@ -141,7 +141,6 @@ class Workspace(object):
                 initial_pos = self.eval_env.get_initial_pos()
                 target_pos = self.eval_env.get_target_pos()
                 episode_dist = l2_distance(initial_pos, target_pos)
-                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], ' MIN: ', self.eval_env.target_dist_min, ' MAX: ', self.eval_env.target_dist_max)
                 while not done:
                     with utils.eval_mode(self.agent):
                         action = self.agent.act(obs, sample=False)
@@ -154,6 +153,7 @@ class Workspace(object):
                         self.init_state = self.daisy.calc_state()
                     self.eval_env.increase_step()
                     episode_reward += reward
+                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], ' MIN: ', self.eval_env.target_dist_min, ' MAX: ', self.eval_env.target_dist_max)
                 curriculum_successes.append(info['success'])
             if np.mean(np.asarray(curriculum_successes)) > 0.5:
                 if self.env.target_dist_max < 10:
@@ -219,6 +219,8 @@ class Workspace(object):
             # run training update
             if self.step >= self.cfg.num_seed_steps:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
+
+#            print('commanded action: ', action)
             self.behavior.target_speed = np.array([action[0], action[1]])
             raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
             time_per_step = 2*self.behavior.stance_duration
@@ -226,6 +228,7 @@ class Workspace(object):
                 raibert_action = raibert_controller.get_action(self.init_state, i+1)
                 next_obs, reward, done, info = self.env.step(raibert_action, low_level=True)
                 self.init_state = self.daisy.calc_state()
+#            print('daisy state: ', self.init_state['base_velocity'], self.init_state['base_pos_x'], self.init_state['base_pos_y'], self.init_state['base_pos_z'])
             self.env.increase_step()
 
             # allow infinite bootstrap

@@ -305,8 +305,8 @@ class FrameStackDepth(gym.Wrapper):
         self.robot = env.robots[0]
         self.high_level_action_space = env.robots[0].high_level_action_space
 
-    def reset(self, eval=False):
-        obs = self.env.reset(eval)
+    def reset(self):
+        obs = self.env.reset()
         obs["depth"] = (obs["depth"] * 255).round().astype(np.uint8)
         obs["depth"] = np.moveaxis(obs["depth"], 2, 0)
         for _ in range(self._k):
