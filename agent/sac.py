@@ -22,7 +22,7 @@ class SACAgent(Agent):
                  critic_lr, critic_betas, critic_tau, critic_target_update_frequency, 
                  batch_size, encoder_feature_dim, num_layers, num_filters, encoder_lr, 
                  decoder_lr, decoder_type, encoder_tau, decoder_update_freq, 
-                 decoder_latent_lambda, decoder_weight_lambda, learnable_temperature):
+                 decoder_latent_lambda, decoder_weight_lambda, learnable_temperature, target_entropy):
         super().__init__()
 
         self.action_range = action_range
@@ -48,7 +48,7 @@ class SACAgent(Agent):
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(self.device)
         self.log_alpha.requires_grad = True
         # set target entropy to -|A|
-        self.target_entropy = -action_dim
+        self.target_entropy = target_entropy
 
         self.decoder = None
         if decoder_type != 'identity':

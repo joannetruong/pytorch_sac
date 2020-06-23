@@ -1,0 +1,33 @@
+hydra:
+  launcher:
+    class: hydra_plugins.submitit.SubmititLauncher
+    # variables used by various queues above
+    tasks_per_node: 1
+    mem_limit: 16
+    cpu: 8
+    gpu: 1
+    time_min: 4320 # 72 hours * 60 minutes
+    params:
+      # one of auto,local,slurm and chronos
+      queue: slurm
+
+      folder: ${hydra.sweep.dir}/.${hydra.launcher.params.queue}
+      queue_parameters:
+        # slurm queue parameters
+        slurm:
+          nodes: 1
+          num_gpus: ${hydra.launcher.gpu}
+          ntasks_per_node: ${hydra.launcher.tasks_per_node}
+          mem: ${hydra.launcher.mem_limit}GB
+          cpus_per_task: ${hydra.launcher.cpu}
+          time: ${hydra.launcher.time_min}
+          partition: learnfair
+          # partition: priority
+          # comment: "conference_deadline_and_date"
+          array_parallelism: 1024
+          signal_delay_s: 120
+          max_num_timeout: 1
+        local:
+          gpus_per_node: ${hydra.launcher.gpu}
+          tasks_per_node: ${hydra.launcher.tasks_per_node}
+          timeout_min: ${hydra.launcher.time_min}

@@ -1,5 +1,6 @@
 defaults:
     - agent: sac
+    - hydra/launcher: submitit
 
 env: cheetah_run
 
@@ -16,6 +17,7 @@ num_seed_steps: 5000
 eval_frequency: 10000
 num_eval_episodes: 50
 num_curriculum_eval_episodes: 10
+reset_initial_pos_only: True
 
 device: cuda
 
@@ -31,13 +33,11 @@ save_buffer: true
 seed: 1
 
 encoder_type: pixel
-frame_stack: 3
 
 # hydra configuration
 hydra:
-    name: ${env}
     run:
-        dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}
+        dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent.name}_${experiment}_${seed}_${reset_initial_pos_only}
 
 pretrained: False
 curriculum: True

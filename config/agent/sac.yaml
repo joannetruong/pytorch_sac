@@ -32,6 +32,7 @@ agent:
     decoder_latent_lambda: 1e-6
     decoder_weight_lambda: 1e-7
     learnable_temperature: True
+    target_entropy: -2
  
 double_q_critic:
   class: agent.critic.DoubleQCritic

@@ -41,7 +41,7 @@ def make_gibson_env(cfg):
                                     action_timestep=1.0 / 10.0,
                                     physics_timestep=1.0 / 40.0,
                                     track=sim2real_track)
-
+    env.reset_initial_pos_only = cfg.reset_initial_pos_only
     return env
 
 class eval_mode(object):
@@ -300,8 +300,8 @@ class FrameStackDepth(gym.Wrapper):
         self.target_dist_min = env.target_dist_min
         self.target_dist_max = env.target_dist_max
 
-    def reset(self, eval=False):
-        obs = self.env.reset(eval)
+    def reset(self):
+        obs = self.env.reset()
         obs["depth"] = (obs["depth"] * 255).round().astype(np.uint8)
         obs["depth"] = np.moveaxis(obs["depth"], 2, 0)
         for _ in range(self._k):
@@ -346,3 +346,6 @@ class FrameStackDepth(gym.Wrapper):
     def set_min_max_dist(self, min, max):
         self.env.target_dist_min = min
         self.env.target_dist_max = max
+        self.target_dist_min = self.env.target_dist_min
+        self.target_dist_max = self.env.target_dist_max
+
