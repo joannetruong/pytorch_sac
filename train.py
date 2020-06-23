@@ -99,6 +99,8 @@ class Workspace(object):
             collision_steps.append(info['collision_step'])
             path_lengths.append(info['path_length'])
         self.logger.log('eval/episode_reward', np.mean(np.asarray(episode_rewards)), self.step)
+        self.logger.log('eval/min_dist', self.env.target_dist_min, self.step)
+        self.logger.log('eval/max_dist', self.env.target_dist_max, self.step)
         self.logger.log('eval/dist_to_goal', np.mean(np.asarray(dist_to_goals)), self.step)
         self.logger.log('eval/episode_dist', np.mean(np.asarray(episode_dists)), self.step)
         self.logger.log('eval/success', np.mean(np.asarray(successes)), self.step)
@@ -155,6 +157,8 @@ class Workspace(object):
                 if self.step > 0:
                     self.logger.log('train/duration',
                                     time.time() - start_time, self.step)
+                    self.logger.log('train/min_dist', self.env.target_dist_min, self.step)
+                    self.logger.log('train/max_dist', self.env.target_dist_max, self.step)
                     self.logger.log('train/episode_reward', episode_reward,
                                     self.step)
                     self.logger.log('train/episode', episode, self.step)
