@@ -17,6 +17,7 @@ eval_frequency: 10
 num_eval_episodes: 10
 num_curriculum_eval_episodes: 10
 
+reset_initial_pos_only: True
 device: cuda
 
 # logger

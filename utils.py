@@ -42,6 +42,7 @@ def make_gibson_env(cfg):
                                     physics_timestep=1.0 / 40.0,
                                     track=sim2real_track)
 
+    env.reset_initial_pos_only = cfg.reset_initial_pos_only
     return env
 
 class eval_mode(object):
