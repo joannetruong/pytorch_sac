@@ -84,7 +84,10 @@ class Workspace(object):
             self.work_dir if cfg.save_video else None)
         self.step = 0
         if self.cfg.curriculum:
-            self.env.set_min_max_dist(0.1, 0.5)
+            self.env.target_dist_min = 0.1
+            self.env.target_dist_max = 0.5
+            self.target_dist_min = 0.1
+            self.target_dist_max = 0.5
         self.hz = 240
         p.setTimeStep(1./self.hz)
         self.daisy = self.env.robots[0]
@@ -100,11 +103,12 @@ class Workspace(object):
             obs = self.env.reset(eval=True)
             obs = obs["sensor"][:2]
             self.agent.reset()
+            self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
             self.video_recorder.init(enabled=(episode == 0))
             done = False
             episode_reward = 0
-            initial_pos = self.env.get_initial_pos()
-            target_pos = self.env.get_target_pos()
+            initial_pos = self.env.initial_pos
+            target_pos = self.env.target_pos
             episode_dist = l2_distance(initial_pos, target_pos)
             while not done:
                 with utils.eval_mode(self.agent):
@@ -112,7 +116,6 @@ class Workspace(object):
                 self.behavior.target_speed = np.array([action[0], action[1]])
                 raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
                 time_per_step = 2*self.behavior.stance_duration
-                self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
                 for i in range(time_per_step):
                     raibert_action = raibert_controller.get_action(self.init_state, i+1)
                     obs, reward, done, info = self.env.step(raibert_action, low_level=True)
@@ -143,16 +146,18 @@ class Workspace(object):
         self.logger.log('eval/path_length', np.mean(np.asarray(path_lengths)), self.step)
 
         if self.cfg.curriculum:
-            self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+            self.env.target_dist_min = self.target_dist_min
+            self.env.target_dist_max = self.target_dist_max
             print('EVAL CURRICULUM: min, max: ', self.env.target_dist_min, self.env.target_dist_max)
             curriculum_successes = []
             for episode in range(self.cfg.num_curriculum_eval_episodes):
                 obs = self.env.reset()
                 self.agent.reset()
+                self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
                 done = False
                 episode_reward = 0
-                initial_pos = self.env.get_initial_pos()
-                target_pos = self.env.get_target_pos()
+                initial_pos = self.env.initial_pos
+                target_pos = self.env.target_pos
                 episode_dist = l2_distance(initial_pos, target_pos)
                 while not done:
                     with utils.eval_mode(self.agent):
@@ -160,7 +165,6 @@ class Workspace(object):
                     self.behavior.target_speed = np.array([action[0], action[1]])
                     raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
                     time_per_step = 2*self.behavior.stance_duration
-                    self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
                     for i in range(time_per_step):
                         raibert_action = raibert_controller.get_action(self.init_state, i+1)
                         obs, reward, done, info = self.env.step(raibert_action, low_level=True)
@@ -169,19 +173,21 @@ class Workspace(object):
                     self.video_recorder.record(self.env, self.cfg.record_params)
                     self.env.current_step +=1
                     episode_reward += reward
-                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"])
+                print('Curriculum eval. INITIAL POS', initial_pos, ' TARGET POS: ', target_pos, ' EPISODE DIST: ', episode_dist, ' SPL: ', info["spl"], ' STEP: ', self.step)
                 curriculum_successes.append(info['success'])
             if np.mean(np.asarray(curriculum_successes)) > 0.5:
                 print('prev min, max: ', self.env.target_dist_min, self.env.target_dist_max)
                 if self.env.target_dist_max < 10:
-                    self.env.target_dist_min +=0.5
-                    self.env.target_dist_max +=0.5
+                    self.target_dist_min +=0.5
+                    self.target_dist_max +=0.5
                 else:
-                    self.env.target_dist_min = 1
-                    self.env.target_dist_max = 10
-                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+                    self.target_dist_min = 1
+                    self.target_dist_max = 10
+                self.env.target_dist_min = self.target_dist_min
+                self.env.target_dist_max = self.target_dist_max
             else:
-                self.env.set_min_max_dist(self.env.target_dist_min, self.env.target_dist_max)
+                self.env.target_dist_min = self.target_dist_min
+                self.env.target_dist_max = self.target_dist_max
             print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg curriculum success: ', np.mean(np.asarray(curriculum_successes)), 'step: ', self.step)
         print('curr min, max: ', self.env.target_dist_min, self.env.target_dist_max, 'avg eval success: ', np.mean(np.asarray(successes)), 'step: ', self.step)
 
@@ -214,6 +220,7 @@ class Workspace(object):
                 obs = self.env.reset()
                 obs = obs["sensor"][:2]
                 self.agent.reset()
+                self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
                 done = False
                 episode_reward = 0
                 episode_step = 0
@@ -235,7 +242,6 @@ class Workspace(object):
             self.behavior.target_speed = np.array([action[0], action[1]])
             raibert_controller = DaisyRaibertController(init_state=self.init_state, behavior_parameters=self.behavior)
             time_per_step = 2*self.behavior.stance_duration
-            self.daisy_state = motion_library.exp_standing(self.daisy, shoulder=1.2, elbow=0.3)
             for i in range(time_per_step):
                 raibert_action = raibert_controller.get_action(self.init_state, i+1)
                 next_obs, reward, done, info = self.env.step(raibert_action, low_level=True)
